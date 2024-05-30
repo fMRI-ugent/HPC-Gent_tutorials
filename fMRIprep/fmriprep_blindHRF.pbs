@@ -1,0 +1,49 @@
+#!/bin/bash
+#PBS -N FMRIPREP
+#PBS -l nodes=1:ppn=8
+#PBS -l mem=25gb
+#PBS -l walltime=24:00:00
+#PBS -m abe
+
+#== READ IN PARTICIPANT NAMES==#
+# This extracts the participant names from the .txt file "subjects_to_run_blindHRF.txt"
+# to allow participants to processed in parallel. This text file must contain
+# the exact names of the participant subdirectories in the BIDS directory.
+
+dos2unix $VSC_SCRATCH/blindHRF/results_fmriprep/subjects_to_run_blindHRF.txt
+export SUBJ=`sed -n "${PBS_ARRAYID}p" $VSC_SCRATCH/blindHRF/results_fmriprep/subjects_to_run_blindHRF.txt` 
+
+#== RUN FMRIPREP ==#
+
+singularity run --cleanenv \
+$VSC_SCRATCH/blindHRF/singularity_prep_23.1.0/fmriprep-23.1.0.simg \
+$VSC_DATA/blindHRF_data/sourcedata/ $VSC_SCRATCH/blindHRF/results_fmriprep/preproc participant \
+--fs-license-file $VSC_SCRATCH/blindHRF/freeSurfer/license.txt \
+-w $VSC_SCRATCH/blindHRF/temp_files_fmriprep \
+--ignore fieldmaps \
+--output-space anat MNI152NLin2009cAsym \
+--skip-bids-validation \
+--mem-mb 24000 \
+--omp-nthreads 8 \
+--nthreads 16 \
+--no-submm-recon \
+--fs-no-reconall \
+--participant-label=$SUBJ \
+
+# Note 1: Submitted to HPC as follows:
+# module swap cluster/skitty
+# cd $VSC_DATA/singularity_prep_23.1.0
+# qsub -t 1 fmriprep_signVWFA_sdc-syn.pbs
+# We recommonend to submit one job for every two participants
+# and submitting a number of different jobs to process in parallel
+# Bottleneck for the number of submitted jobs is the size of the
+# $VSC_DATA folder, which contains the working directory. 
+# First, process one subject, see how much data is stored in de
+# working directory and use this as an estimate for the number of
+# subjects that can be processed in parallel. Always delete the
+# content of the working directory before submitting a new batch
+# of participants.
+
+# Note 2:
+# No slice timing correction since data is multiband
+# At most 150 ICA components are requested (to reduce runtime)
